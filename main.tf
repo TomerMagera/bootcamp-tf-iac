@@ -1,9 +1,3 @@
-# 1. seperate variables' values to .tfvar file. - done
-# 2. add postgres module handling.
-# 3. Add things for LB: LBRule, LBRule1, health probes.
-# 4. handle the backend part.
-# 5. handle the NSG rules - ports 8080,22,5432 - done
-# 6. add admin user/pass as arguments to module webserves for vm authentication - done
 
 
 # Configure the Azure provider
