@@ -15,6 +15,15 @@ terraform {
     }
   }
 
+  # terraform state storage to Azure storage container
+  # will store the state of the base project
+  backend "azurerm" {
+    resource_group_name  = "devEnv-rg-bootcamp-tf"
+    storage_account_name = "tomerbcstorageaccount"
+    container_name       = "bootcamp-storage-container"
+    key                  = "week5-baseproject-terraform.tfstate"
+  }
+
   required_version = ">= 1.0.0"
 }
 
