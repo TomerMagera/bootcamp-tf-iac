@@ -215,6 +215,22 @@ resource "azurerm_network_security_rule" "private_nsg_rule_inbound" {
   depends_on = [azurerm_network_security_group.nsgs]
 }
 
+resource "azurerm_network_security_rule" "private_nsg_rule_outbound" {
+  name                        = "DenyInternet"
+  priority                    = "1000"
+  direction                   = "Outbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.rg.name
+  network_security_group_name = azurerm_network_security_group.nsgs[1].name
+
+  depends_on = [azurerm_network_security_group.nsgs]
+}
+
 resource "azurerm_availability_set" "avset" {
   name                         = "${local.name_prefix}-avset"
   location                     = azurerm_resource_group.rg.location
@@ -226,6 +242,10 @@ resource "azurerm_availability_set" "avset" {
   tags       = var.tags
   depends_on = [azurerm_resource_group.rg]
 }
+
+/* for the bonus B I will not create an additional storage account...
+  don't think it will be compulsory, but if yes, I'll use the one 
+  already created in the base project resource group (main branch).
 
 # create storage account
 resource "azurerm_storage_account" "storage" {
@@ -247,7 +267,7 @@ resource "azurerm_storage_container" "storagecont" {
 
   depends_on = [azurerm_storage_account.storage]
 }
-
+*/
 
 # Creating the web VMs and their NICs
 module "webservers" {
@@ -257,7 +277,7 @@ module "webservers" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   subnet_id           = azurerm_subnet.subnets[0].id
-  vm_name             = "webserver-${count.index}"
+  vm_name             = "${local.name_prefix}-webserver-${count.index}"
   avset_id            = azurerm_availability_set.avset.id
   admin_username      = var.admin_username
   admin_password      = var.admin_password
@@ -266,27 +286,67 @@ module "webservers" {
   depends_on = [
     azurerm_resource_group.rg,
     azurerm_virtual_network.vnet,
-    azurerm_availability_set.avset
+    azurerm_availability_set.avset,
+    azurerm_subnet.subnets
   ]
 }
 
-# Creating the db VM and its NIC
-module "dbserver" {
-  source = "./modules/machines"
-
-  count               = 1
+# azure postgressql service
+# the NIC
+resource "azurerm_network_interface" "pg_ni" {
+  name                = "${var.pg_vm_name}-NIC"
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnets[1].id
-  vm_name             = "dbserver"
-  avset_id            = azurerm_availability_set.avset.id
-  admin_username      = var.admin_username
-  admin_password      = var.admin_password
 
+  ip_configuration {
+    name                          = "testConfiguration-${var.pg_vm_name}"
+    subnet_id                     = azurerm_subnet.subnets[1].id
+    private_ip_address_allocation = "dynamic"
+  }
+
+  tags = var.tags
   depends_on = [
     azurerm_resource_group.rg,
     azurerm_virtual_network.vnet,
     azurerm_availability_set.avset,
-    module.webservers
+    azurerm_subnet.subnets
   ]
 }
+
+resource "azurerm_postgresql_server" "postgress_db" {
+  name                          = "${local.name_prefix}-postgres-db-server"
+  resource_group_name           = azurerm_resource_group.rg.name
+  location                      = azurerm_resource_group.rg.location
+  administrator_login           = var.admin_username
+  administrator_login_password  = var.admin_password
+  backup_retention_days         = 7
+  sku_name                      = "GP_Gen5_4"
+  version                       = "11"
+  geo_redundant_backup_enabled  = true
+  auto_grow_enabled             = true
+  public_network_access_enabled = true
+  ssl_enforcement_enabled       = false
+
+
+}
+
+# azure postgresql firewall rules - public ip
+resource "azurerm_postgresql_firewall_rule" "pg_fw_rule_pip" {
+  name                = "allow-public-ip"
+  resource_group_name = azurerm_resource_group.rg.name
+  server_name         = azurerm_postgresql_server.postgress_db.name
+  start_ip_address    = azurerm_public_ip.pip.ip_address
+  end_ip_address      = azurerm_public_ip.pip.ip_address
+}
+
+# azure postgresql firewall rules - current client ip
+resource "azurerm_postgresql_firewall_rule" "pg_fw_rule_curclntip" {
+  name                = "allow-current_client_ip"
+  resource_group_name = azurerm_resource_group.rg.name
+  server_name         = azurerm_postgresql_server.postgress_db.name
+  start_ip_address    = var.my_current_client_ip
+  end_ip_address      = var.my_current_client_ip
+}
+
+
+
