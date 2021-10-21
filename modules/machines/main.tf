@@ -1,6 +1,6 @@
 
 resource "azurerm_network_interface" "ni" {
-  name                = "NIC-${var.vm_name}"
+  name                = "${var.vm_name}-NIC"
   location            = var.location
   resource_group_name = var.resource_group_name
 
