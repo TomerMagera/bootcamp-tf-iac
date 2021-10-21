@@ -17,14 +17,6 @@ output "subnets_ids" {
   ]
 }
 
-output "ws_admin_password" {
-  value = [
-    for server in flatten(module.webservers) :
-    server.vm_admin_password
-  ]
-  sensitive = true
-}
-
 output "pg_admin_password" {
   value     = azurerm_postgresql_server.postgress_db.administrator_login_password
   sensitive = true
@@ -35,23 +27,12 @@ output "pg_admin_username" {
   sensitive = true
 }
 
-output "count_of_webservers" {
-  value = length(module.webservers)
-}
-
 output "public_ip_addr" {
   description = "id of the public ip address provisoned."
   value       = azurerm_public_ip.pip.*.ip_address
 }
 
-/*
-output "pg_private_ip" {
-  value = azurerm_postgresql_server.postgress_db.pri
-}
-*/
-output "webservers_internal_ip" {
-  value = [
-    for server in flatten(module.webservers) :
-    server.network_interface_private_ip
-  ]
+output "vmss_id" {
+  description = "vm ss id"
+  value       = azurerm_linux_virtual_machine_scale_set.linuxvmss.id
 }

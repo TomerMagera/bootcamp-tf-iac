@@ -8,16 +8,16 @@ terraform {
       version = "~> 2.65"
     }
   }
-
- # terraform state storage to Azure storage container
- # will store the state of the bonus b entire infrastructure.
+/*
+  # terraform state storage to Azure storage container
+  # will store the state of the bonus b entire infrastructure.
   backend "azurerm" {
     resource_group_name  = "devEnv-rg-bootcamp-tf"
     storage_account_name = "tomerbcstorageaccount"
     container_name       = "bootcamp-storage-container"
-    key                  = "week5-bonus-b-terraform.tfstate"
+    key                  = "week5-bonus-c-terraform.tfstate"
   }
-
+*/
   required_version = ">= 1.0.0"
 }
 
@@ -156,18 +156,6 @@ resource "azurerm_lb_rule" "lb_rule_2" {
   depends_on = [azurerm_lb_probe.lb_probe1]
 }
 
-# configuring lb backend pool with the webservers 
-# that the LB will need to balance load to them.
-resource "azurerm_lb_backend_address_pool_address" "be_addrpool_addr" {
-  count                   = length(module.webservers)
-  name                    = "${local.name_prefix}-addr_pool_addr-${count.index}"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.backend_pool.id
-  virtual_network_id      = azurerm_virtual_network.vnet.id
-  ip_address              = element(module.webservers.*.network_interface_private_ip, count.index)
-
-  depends_on = [module.webservers]
-}
-
 # The NSGs - pubic and private.
 resource "azurerm_network_security_group" "nsgs" {
   count               = length(var.nsgs)
@@ -240,88 +228,7 @@ resource "azurerm_network_security_rule" "private_nsg_rule_outbound" {
   depends_on = [azurerm_network_security_group.nsgs]
 }
 
-resource "azurerm_availability_set" "avset" {
-  name                         = "${local.name_prefix}-avset"
-  location                     = azurerm_resource_group.rg.location
-  resource_group_name          = azurerm_resource_group.rg.name
-  platform_fault_domain_count  = 2
-  platform_update_domain_count = 2
-  managed                      = true
-
-  tags       = var.tags
-  depends_on = [azurerm_resource_group.rg]
-}
-
-/* for the bonus B I will not create an additional storage account...
-  don't think it will be compulsory, but if yes, I'll use the one 
-  already created in the base project resource group (main branch).
-
-# create storage account
-resource "azurerm_storage_account" "storage" {
-  name                     = "tomerbcstorageaccount"
-  resource_group_name      = azurerm_resource_group.rg.name
-  location                 = azurerm_resource_group.rg.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-
-  tags       = var.tags
-  depends_on = [azurerm_resource_group.rg]
-}
-
-# create storage container
-resource "azurerm_storage_container" "storagecont" {
-  name                  = "bootcamp-storage-container"
-  storage_account_name  = azurerm_storage_account.storage.name
-  container_access_type = "private"
-
-  depends_on = [azurerm_storage_account.storage]
-}
-*/
-
-# Creating the web VMs and their NICs
-module "webservers" {
-  source = "./modules/machines"
-
-  count               = var.num_webservers_to_create
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = azurerm_subnet.subnets[0].id
-  vm_name             = "${local.name_prefix}-webserver-${count.index}"
-  avset_id            = azurerm_availability_set.avset.id
-  admin_username      = var.admin_username
-  admin_password      = var.admin_password
-
-  tags = var.tags
-  depends_on = [
-    azurerm_resource_group.rg,
-    azurerm_virtual_network.vnet,
-    azurerm_availability_set.avset,
-    azurerm_subnet.subnets
-  ]
-}
-
-# azure postgressql service
-# the NIC
-resource "azurerm_network_interface" "pg_ni" {
-  name                = "${var.pg_vm_name}-NIC"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-
-  ip_configuration {
-    name                          = "testConfiguration-${var.pg_vm_name}"
-    subnet_id                     = azurerm_subnet.subnets[1].id
-    private_ip_address_allocation = "dynamic"
-  }
-
-  tags = var.tags
-  depends_on = [
-    azurerm_resource_group.rg,
-    azurerm_virtual_network.vnet,
-    azurerm_availability_set.avset,
-    azurerm_subnet.subnets
-  ]
-}
-
+# the azure postgresql server - managed db service.
 resource "azurerm_postgresql_server" "postgress_db" {
   name                          = "${local.name_prefix}-postgres-db-server"
   resource_group_name           = azurerm_resource_group.rg.name
@@ -336,7 +243,7 @@ resource "azurerm_postgresql_server" "postgress_db" {
   public_network_access_enabled = true
   ssl_enforcement_enabled       = false
 
-
+  tags = var.tags
 }
 
 # azure postgresql firewall rules - public ip
@@ -348,14 +255,123 @@ resource "azurerm_postgresql_firewall_rule" "pg_fw_rule_pip" {
   end_ip_address      = azurerm_public_ip.pip.ip_address
 }
 
-# azure postgresql firewall rules - current client ip
-resource "azurerm_postgresql_firewall_rule" "pg_fw_rule_curclntip" {
-  name                = "allow-current_client_ip"
+# azure linux virtual machine scale set.
+resource "azurerm_linux_virtual_machine_scale_set" "linuxvmss" {
+  name                = "${local.name_prefix}-vmss"
   resource_group_name = azurerm_resource_group.rg.name
-  server_name         = azurerm_postgresql_server.postgress_db.name
-  start_ip_address    = var.my_current_client_ip
-  end_ip_address      = var.my_current_client_ip
+  location            = azurerm_resource_group.rg.location
+  sku                 = var.vm_size
+  instances           = 2
+  admin_username      = var.admin_username
+  admin_password      = var.admin_password
+
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-focal"
+    sku       = "20_04-lts-gen2"
+    version   = "latest"
+  }
+
+  os_disk {
+    caching              = "ReadWrite"
+    storage_account_type = "Standard_LRS"
+  }
+  upgrade_mode = "Automatic"
+
+  network_interface {
+    name                      = "vmss-nic"
+    primary                   = true
+    network_security_group_id = azurerm_network_security_group.nsgs[0].id # public NSG
+
+    ip_configuration {
+      name                                   = "internal"
+      primary                                = true
+      subnet_id                              = azurerm_subnet.subnets[0].id # public subnet
+      load_balancer_backend_address_pool_ids = [azurerm_lb_backend_address_pool.backend_pool.id]
+    }
+  }
+
+  disable_password_authentication = "false"
+
+  tags = var.tags
+  depends_on = [
+    azurerm_resource_group.rg,
+    azurerm_lb_backend_address_pool.backend_pool,
+    azurerm_network_security_group.nsgs,
+    azurerm_subnet.subnets
+  ]
 }
 
+# azure monitor auto scaling setting
+# This is instead of the module of the VMs which was creating the 3 webservers.
+resource "azurerm_monitor_autoscale_setting" "mon_scalesetting" {
+  name                = "${local.name_prefix}-autoscale-setting"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  target_resource_id  = azurerm_linux_virtual_machine_scale_set.linuxvmss.id
+  # Notification  
+  notification {
+    email {
+      send_to_subscription_administrator    = true
+      send_to_subscription_co_administrator = true
+      custom_emails                         = ["tomer.magera@gmail.com"]
+    }
+  }
+
+  # default profile
+  profile {
+    name = "defaultprofile"
+    # Capacity Block     
+    capacity {
+      default = 2
+      minimum = 2
+      maximum = 3
+    }
+
+    ## Scale-Out - as per percentage cpu metric - if crossed threshold 85 
+    rule {
+      scale_action {
+        direction = "Increase"
+        type      = "ChangeCount"
+        value     = 1
+        cooldown  = "PT5M"
+      }
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.linuxvmss.id
+        metric_namespace   = "microsoft.compute/virtualmachinescalesets"
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT5M"
+        time_aggregation   = "Average"
+        operator           = "GreaterThan"
+        threshold          = 85
+      }
+    }
+
+    ## Scale-In - as per percentage cpu metric - if crossed threshold 85
+    rule {
+      scale_action {
+        direction = "Decrease"
+        type      = "ChangeCount"
+        value     = 1
+        cooldown  = "PT5M"
+      }
+      metric_trigger {
+        metric_name        = "Percentage CPU"
+        metric_resource_id = azurerm_linux_virtual_machine_scale_set.linuxvmss.id
+        metric_namespace   = "microsoft.compute/virtualmachinescalesets"
+        time_grain         = "PT1M"
+        statistic          = "Average"
+        time_window        = "PT5M"
+        time_aggregation   = "Average"
+        operator           = "LessThan"
+        threshold          = 25
+      }
+    }
+  }
+
+  depends_on = [azurerm_linux_virtual_machine_scale_set.linuxvmss]
+}
 
 

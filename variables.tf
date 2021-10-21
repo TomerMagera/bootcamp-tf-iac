@@ -57,6 +57,12 @@ variable "pg_vm_name" {
   description = "name of the vm of the postgres service"
   default     = "pg-vm"
 }
+
+# This will be my default, and if other will be
+# needed, we can pass the value from tfvars.
+variable "vm_size" {
+  default = "Standard_B1s"
+}
 #################################
 # Network related variables
 #################################
