@@ -25,11 +25,13 @@ output "ws_admin_password" {
   sensitive = true
 }
 
-output "dbs_admin_password" {
-  value = [
-    for server in flatten(module.dbserver) :
-    server.vm_admin_password
-  ]
+output "pg_admin_password" {
+  value     = azurerm_postgresql_server.postgress_db.administrator_login_password
+  sensitive = true
+}
+
+output "pg_admin_username" {
+  value     = azurerm_postgresql_server.postgress_db.administrator_login
   sensitive = true
 }
 
@@ -42,14 +44,11 @@ output "public_ip_addr" {
   value       = azurerm_public_ip.pip.*.ip_address
 }
 
-
-output "dbserver_internal_ip" {
-  value = [
-    for server in flatten(module.dbserver) :
-    server.network_interface_private_ip
-  ]
+/*
+output "pg_private_ip" {
+  value = azurerm_postgresql_server.postgress_db.pri
 }
-
+*/
 output "webservers_internal_ip" {
   value = [
     for server in flatten(module.webservers) :

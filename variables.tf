@@ -32,6 +32,12 @@ variable "tags" {
   }
 }
 
+variable "my_current_client_ip" {
+  type        = string
+  description = "the current client ip address"
+  default     = "0.0.0.0"
+}
+
 #the quantity of webservers to create
 variable "num_webservers_to_create" {
   description = "the quantity of webservers to create"
@@ -39,6 +45,18 @@ variable "num_webservers_to_create" {
   default     = "1"
 }
 
+variable "admin_username" {
+  type = string
+}
+
+variable "admin_password" {
+  type = string
+}
+
+variable "pg_vm_name" {
+  description = "name of the vm of the postgres service"
+  default     = "pg-vm"
+}
 #################################
 # Network related variables
 #################################
@@ -54,7 +72,6 @@ variable "vnet_name" {
 variable "vnet_address_space" {
   description = "virtual network address space"
   type        = list(string)
-  default     = ["10.0.0.0/20"]
 }
 
 # names of the subnets
@@ -82,14 +99,6 @@ variable "nsgs" {
 ###################################
 
 variable "public_ip_name" {
-  type = string
-}
-
-variable "admin_username" {
-  type = string
-}
-
-variable "admin_password" {
   type = string
 }
 
