@@ -1,0 +1,17 @@
+resource_group_name      = "rg-bootcamp-tf"
+subnets_cidrs            = ["10.2.0.0/23", "10.2.2.0/23"]
+subnets_names            = ["public", "private"]
+vnet_name                = "bootcamp-vnet"
+resource_group_location  = "westeurope"
+public_ip_name           = "publicIPForLB"
+lb_name                  = "loadBalancer"
+publicIp_forLB           = "lb_public_ip"
+nsgs                     = ["public-nsg", "private-nsg"]
+admin_username           = "tomerm"
+admin_password           = "mageraT@49"
+environment              = "bonus-c"
+num_webservers_to_create = 2
+vnet_address_space       = ["10.2.0.0/20"]
+pg_vm_name               = "pg_sql_dbserver"
+
+
